@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 颜值综合评价系统</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    }
+
+    .face-score-container {
+      display: flex;
+      justify-content: center;
+      padding: 40px;
+      background-color: #f5f7fa;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .box-card {
+      width: 100%;
+      max-width: 600px;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+    }
+
+    .card-header {
+      text-align: center;
+    }
+    
+    .card-header h2 {
+      margin: 0 0 8px;
+      color: #303133;
+    }
+    
+    .card-header .subtitle {
+      font-size: 13px;
+      color: #909399;
+    }
+
+    .upload-area {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    /* 覆盖 Element Plus 默认的拖拽区域样式 */
+    .upload-area .el-upload-dragger {
+      padding: 0;
+      height: 300px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      background-color: #fafafa;
+      border: 2px dashed #dcdfe6;
+    }
+
+    .upload-area .el-upload-dragger:hover {
+      border-color: #0a8b81;
+    }
+
+    .preview-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background-color: #000;
+    }
+
+    .upload-placeholder {
+      padding: 40px;
+    }
+    
+    .upload-placeholder .el-icon--upload {
+      font-size: 60px;
+      color: #c0c4cc;
+      margin-bottom: 15px;
+    }
+    
+    .upload-placeholder .el-upload__text {
+      color: #606266;
+    }
+    
+    .upload-placeholder .el-upload__text em {
+      color: #0a8b81;
+      font-style: normal;
+      font-weight: bold;
+    }
+
+    /* 新增：拍照按钮区域 */
+    .camera-actions {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .action-bar {
+      text-align: center;
+    }
+    
+    .action-bar .el-button {
+      width: 200px;
+      border-radius: 20px;
+    }
+
+    .result-area {
+      margin-top: 20px;
+    }
+
+    .score-display {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .score-display h3 {
+      color: #606266;
+      margin-bottom: 15px;
+    }
+
+    .score-display .score-text {
+      font-size: 32px;
+      font-weight: bold;
+      color: #f56c6c;
+    }
+
+    .mt-20 {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="face-score-container">
+      <el-card class="box-card">
+        <template #header>
+          <div class="card-header">
+            <h2>✨ AI 颜值综合评价系统 ✨</h2>
+            <span class="subtitle">上传正面清晰人脸照，获取 AI 维度分析</span>
+          </div>
+        </template>
+
+        <div class="upload-area">
+          <el-upload
+            class="avatar-uploader"
+            drag
+            action="#"
+            :auto-upload="false"
+            :show-file-list="false"
+            :on-change="handleFileChange"
+            accept="image/*"
+          >
+            <img v-if="imageUrl" :src="imageUrl" class="preview-img" />
+            <div v-else class="upload-placeholder">
+              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+              <div class="el-upload__text">将人脸照片拖到此处，或 <em>点击相册上传</em></div>
+              <div class="el-upload__tip">支持 JPG/PNG 格式，不超过 15MB</div>
+            </div>
+          </el-upload>
+        </div>
+
+        <div class="camera-actions">
+          <input 
+            type="file" 
+            accept="image/*" 
+            capture="user" 
+            style="display: none" 
+            ref="cameraInputRef" 
+            @change="handleCameraChange"
+          >
+          <el-button type="success" plain @click="triggerCamera" style="width: 200px; border-radius: 20px;">
+            <el-icon style="margin-right: 5px;"><Camera /></el-icon> 手机实时拍照
+          </el-button>
+        </div>
+
+        <div class="action-bar">
+          <el-button 
+            type="primary" 
+            size="large" 
+            :loading="loading" 
+            :disabled="!rawFile" 
+            @click="startAnalysis"
+            color="#0a8b81"
+          >
+            {{ loading ? 'AI 正在分析面部特征...' : '开始测算颜值' }}
+          </el-button>
+        </div>
+
+        <el-collapse-transition>
+          <div v-if="result" class="result-area mt-20">
+            <el-divider>测算结果</el-divider>
+            
+            <div class="score-display">
+              <h3>综合颜值评分：<span class="score-text">{{ result.score }}</span> 分</h3>
+              <el-progress 
+                :text-inside="true" 
+                :stroke-width="24" 
+                :percentage="result.score" 
+                :color="customColors" 
+              />
+            </div>
+
+            <div class="details mt-20">
+              <el-descriptions border :column="2">
+                <el-descriptions-item label="预估年龄">{{ result.age }} 岁</el-descriptions-item>
+                <el-descriptions-item label="情绪状态">{{ result.emotion }}</el-descriptions-item>
+                <el-descriptions-item label="性别倾向">{{ result.gender }}</el-descriptions-item>
+                <el-descriptions-item label="面部轮廓">{{ result.faceShape }}</el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </div>
+        </el-collapse-transition>
+      </el-card>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://unpkg.com/element-plus"></script>
+  <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+  <script>
+    const { createApp, ref } = Vue;
+    const { ElMessage } = ElementPlus;
+
+    const app = createApp({
+      setup() {
+        const imageUrl = ref('');
+        const rawFile = ref(null);
+        const loading = ref(false);
+        const result = ref(null);
+        const cameraInputRef = ref(null); // 引用原生 input
+
+        const customColors = [
+          { color: '#909399', percentage: 60 },
+          { color: '#e6a23c', percentage: 70 },
+          { color: '#5cb87a', percentage: 80 },
+          { color: '#409eff', percentage: 90 },
+          { color: '#f56c6c', percentage: 100 },
+        ];
+
+        // 核心：处理获取到的文件（提取出来的通用方法）
+        const processFile = (file) => {
+          if (!file) return;
+          if (file.size / 1024 / 1024 > 15) {
+            ElMessage.error('原图过大，请上传 15MB 以内的照片!');
+            return;
+          }
+          rawFile.value = file;
+          imageUrl.value = URL.createObjectURL(file);
+          result.value = null; // 清空上次结果
+        };
+
+        // 处理 Element Upload 选择的文件
+        const handleFileChange = (uploadFile) => {
+          processFile(uploadFile.raw);
+        };
+
+        // 🌟 新增：触发原生 input 点击
+        const triggerCamera = () => {
+          if (cameraInputRef.value) {
+            cameraInputRef.value.click();
+          }
+        };
+
+        // 🌟 新增：处理原生 input 拍照后的文件
+        const handleCameraChange = (event) => {
+          const file = event.target.files[0];
+          processFile(file);
+          // 清空 input 的 value，保证下次拍同一张图也能触发 change 事件
+          event.target.value = ''; 
+        };
+
+        const fileToBase64 = (file) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+          });
+        };
+        // 🌟 2. 新增：前端 Canvas 智能压缩图片函数
+        const compressImage = (file, maxSizeMB = 1.8) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+              const img = new Image();
+              img.src = e.target.result;
+              img.onload = () => {
+                // 限制图片最大边长为 1200px (足够人脸识别使用了)
+                let { width, height } = img;
+                const maxDim = 1200;
+                if (width > maxDim || height > maxDim) {
+                  if (width > height) {
+                    height = Math.round(height * (maxDim / width));
+                    width = maxDim;
+                  } else {
+                    width = Math.round(width * (maxDim / height));
+                    height = maxDim;
+                  }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // 动态降低画质，直到体积达标
+                let quality = 0.9;
+                let base64 = canvas.toDataURL('image/jpeg', quality);
+                
+                // base64 字符串大小粗略估算公式：长度 * 0.75
+                while (base64.length * 0.75 / 1024 / 1024 > maxSizeMB && quality > 0.2) {
+                  quality -= 0.1;
+                  base64 = canvas.toDataURL('image/jpeg', quality);
+                }
+
+                resolve(base64);
+              };
+              img.onerror = reject;
+            };
+            reader.onerror = reject;
+          });
+        };
+        const startAnalysis = async () => {
+          if (!rawFile.value) return;
+          loading.value = true;
+
+          try {
+            // const base64Image = await fileToBase64(rawFile.value);
+            const base64Image = await compressImage(rawFile.value, 1.8);  
+            const API_KEY = 'dsO3p8rDxhBbSSAI5L8l2QYZWsWBBUNj';
+            const API_SECRET = '35LhwuV60Nca-fSVHGHjnriSZPqASxWE';
+            
+            const formData = new FormData();
+            formData.append('api_key', API_KEY);
+            formData.append('api_secret', API_SECRET);
+            formData.append('image_base64', base64Image.split(',')[1]); 
+            formData.append('return_attributes', 'beauty,age,gender,emotion,facequality');
+            
+            const res = await axios.post('https://api-cn.faceplusplus.com/facepp/v3/detect', formData);
+            
+            if (res.data.faces && res.data.faces.length > 0) {
+              const attrs = res.data.faces[0].attributes;
+              result.value = {
+                score: Math.round(attrs.beauty.female_score), // 取女性视角打分(或male_score)
+                age: attrs.age.value,
+                emotion: Object.keys(attrs.emotion).reduce((a, b) => attrs.emotion[a] > attrs.emotion[b] ? a : b),
+                gender: attrs.gender.value === 'Female' ? '女性' : '男性',
+                faceShape: '数据解析自 api' 
+              };
+              ElMessage.success('测算完成！');
+              return;
+            } else {
+              throw new Error('未检测到人脸');
+            }
+
+          } catch (error) {
+            console.error(error);
+            ElMessage.error(error.message);
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        return {
+          imageUrl,
+          rawFile,
+          loading,
+          result,
+          customColors,
+          cameraInputRef,
+          handleFileChange,
+          triggerCamera,
+          handleCameraChange,
+          startAnalysis
+        };
+      }
+    });
+
+    app.use(ElementPlus);
+    // 全局注册图标
+    for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+      app.component(key, component);
+    }
+    app.mount('#app');
+  </script>
+</body>
+</html>
