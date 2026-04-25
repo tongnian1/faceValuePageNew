@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI 颜值综合评价系统</title>
-  
+
   <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
-  
+
   <style>
     body {
       margin: 0;
@@ -33,12 +34,12 @@
     .card-header {
       text-align: center;
     }
-    
+
     .card-header h2 {
       margin: 0 0 8px;
       color: #303133;
     }
-    
+
     .card-header .subtitle {
       font-size: 13px;
       color: #909399;
@@ -76,17 +77,17 @@
     .upload-placeholder {
       padding: 40px;
     }
-    
+
     .upload-placeholder .el-icon--upload {
       font-size: 60px;
       color: #c0c4cc;
       margin-bottom: 15px;
     }
-    
+
     .upload-placeholder .el-upload__text {
       color: #606266;
     }
-    
+
     .upload-placeholder .el-upload__text em {
       color: #0a8b81;
       font-style: normal;
@@ -102,7 +103,7 @@
     .action-bar {
       text-align: center;
     }
-    
+
     .action-bar .el-button {
       width: 200px;
       border-radius: 20px;
@@ -133,6 +134,7 @@
     }
   </style>
 </head>
+
 <body>
   <div id="app">
     <div class="face-score-container">
@@ -145,15 +147,8 @@
         </template>
 
         <div class="upload-area">
-          <el-upload
-            class="avatar-uploader"
-            drag
-            action="#"
-            :auto-upload="false"
-            :show-file-list="false"
-            :on-change="handleFileChange"
-            accept="image/*"
-          >
+          <el-upload class="avatar-uploader" drag action="#" :auto-upload="false" :show-file-list="false"
+            :on-change="handleFileChange" accept="image/*">
             <img v-if="imageUrl" :src="imageUrl" class="preview-img" />
             <div v-else class="upload-placeholder">
               <el-icon class="el-icon--upload"><upload-filled /></el-icon>
@@ -164,44 +159,30 @@
         </div>
 
         <div class="camera-actions">
-          <input 
-            type="file" 
-            accept="image/*" 
-            capture="user" 
-            style="display: none" 
-            ref="cameraInputRef" 
-            @change="handleCameraChange"
-          >
+          <input type="file" accept="image/*" capture="user" style="display: none" ref="cameraInputRef"
+            @change="handleCameraChange">
           <el-button type="success" plain @click="triggerCamera" style="width: 200px; border-radius: 20px;">
-            <el-icon style="margin-right: 5px;"><Camera /></el-icon> 手机实时拍照
+            <el-icon style="margin-right: 5px;">
+              <Camera />
+            </el-icon> 手机实时拍照
           </el-button>
         </div>
 
         <div class="action-bar">
-          <el-button 
-            type="primary" 
-            size="large" 
-            :loading="loading" 
-            :disabled="!rawFile" 
-            @click="startAnalysis"
-            color="#0a8b81"
-          >
-            {{ loading ? 'AI 正在分析面部特征...' : '开始测算颜值' }}
+          <el-button type="primary" size="large" @click="startAnalysis" :loading="loading" :disabled="!isValidLink"
+            style="width: 100%; border-radius: 8px;">
+            <el-icon class="el-icon--left"><i class="ep-magic-stick"></i></el-icon>
+            {{ isValidLink ? '开始 AI 综合评价' : '链接无效/已使用' }}
           </el-button>
         </div>
 
         <el-collapse-transition>
           <div v-if="result" class="result-area mt-20">
             <el-divider>测算结果</el-divider>
-            
+
             <div class="score-display">
               <h3>综合颜值评分：<span class="score-text">{{ result.score }}</span> 分</h3>
-              <el-progress 
-                :text-inside="true" 
-                :stroke-width="24" 
-                :percentage="result.score" 
-                :color="customColors" 
-              />
+              <el-progress :text-inside="true" :stroke-width="24" :percentage="result.score" :color="customColors" />
             </div>
 
             <div class="details mt-20">
@@ -224,7 +205,7 @@
   <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
 
   <script>
-    const { createApp, ref } = Vue;
+    const { createApp, ref, onMounted } = Vue;
     const { ElMessage } = ElementPlus;
 
     const app = createApp({
@@ -234,7 +215,10 @@
         const loading = ref(false);
         const result = ref(null);
         const cameraInputRef = ref(null); // 引用原生 input
-
+        // 新增：存放从网址里拿到的邀请码
+        const inviteCode = ref('');
+        // 新增：判断链接是否合法
+        const isValidLink = ref(true);
         const customColors = [
           { color: '#909399', percentage: 60 },
           { color: '#e6a23c', percentage: 70 },
@@ -242,7 +226,19 @@
           { color: '#409eff', percentage: 90 },
           { color: '#f56c6c', percentage: 100 },
         ];
+        // 页面加载时自动执行
+        onMounted(() => {
+          // 读取网址中的参数 (比如 ?code=INV_A1B2)
+          const urlParams = new URLSearchParams(window.location.search);
+          const code = urlParams.get('code');
 
+          if (code) {
+            inviteCode.value = code;
+          } else {
+            isValidLink.value = false;
+            ElMessage.error('链接无效：缺少邀请码！无法进行测算。');
+          }
+        });
         // 核心：处理获取到的文件（提取出来的通用方法）
         const processFile = (file) => {
           if (!file) return;
@@ -272,7 +268,7 @@
           const file = event.target.files[0];
           processFile(file);
           // 清空 input 的 value，保证下次拍同一张图也能触发 change 事件
-          event.target.value = ''; 
+          event.target.value = '';
         };
 
         const fileToBase64 = (file) => {
@@ -314,7 +310,7 @@
                 // 动态降低画质，直到体积达标
                 let quality = 0.9;
                 let base64 = canvas.toDataURL('image/jpeg', quality);
-                
+
                 // base64 字符串大小粗略估算公式：长度 * 0.75
                 while (base64.length * 0.75 / 1024 / 1024 > maxSizeMB && quality > 0.2) {
                   quality -= 0.1;
@@ -329,57 +325,62 @@
           });
         };
         const startAnalysis = async () => {
+          if (!isValidLink.value) {
+            ElMessage.error('链接无效，请联系管理员获取专属链接！');
+            return;
+          }
           if (!rawFile.value) return;
           loading.value = true;
 
           try {
-            // const base64Image = await fileToBase64(rawFile.value);
-            const base64Image = await compressImage(rawFile.value, 1.8);  
-            const API_KEY = 'dsO3p8rDxhBbSSAI5L8l2QYZWsWBBUNj';
-            const API_SECRET = '35LhwuV60Nca-fSVHGHjnriSZPqASxWE';
-            
-            const formData = new FormData();
-            formData.append('api_key', API_KEY);
-            formData.append('api_secret', API_SECRET);
-            formData.append('image_base64', base64Image.split(',')[1]); 
-            formData.append('return_attributes', 'beauty,age,gender,emotion,facequality');
-            
-            const res = await axios.post('https://api-cn.faceplusplus.com/facepp/v3/detect', formData);
-            
+            const base64Image = await compressImage(rawFile.value, 1.8);
+            const pureBase64 = base64Image.split(',')[1];
+
+            // 关键：将邀请码发给后端
+            const res = await axios.post('http://localhost:3000/api/face-detect', {
+              image_base64: pureBase64,
+              inviteCode: inviteCode.value
+            });
+
+            // ... 后面解析 res.data.faces 的逻辑保持完全不变 ...
             if (res.data.faces && res.data.faces.length > 0) {
               const attrs = res.data.faces[0].attributes;
-              result.value = {
-                score: Math.round(attrs.beauty.female_score), // 取女性视角打分(或male_score)
-                age: attrs.age.value,
-                emotion: Object.keys(attrs.emotion).reduce((a, b) => attrs.emotion[a] > attrs.emotion[b] ? a : b),
-                gender: attrs.gender.value === 'Female' ? '女性' : '男性',
-                faceShape: '数据解析自 api' 
+
+              const emotionMap = {
+                anger: '愤怒', disgust: '厌恶', fear: '恐惧', happiness: '喜悦',
+                neutral: '平静', sadness: '悲伤', surprise: '惊讶'
               };
-              ElMessage.success('测算完成！');
-              return;
+              const mainEmotion = Object.keys(attrs.emotion).reduce((a, b) =>
+                attrs.emotion[a] > attrs.emotion[b] ? a : b
+              );
+
+              result.value = {
+                score: Math.round(attrs.beauty.female_score),
+                age: attrs.age.value,
+                emotion: emotionMap[mainEmotion] || mainEmotion,
+                gender: attrs.gender.value === 'Female' ? '女性' : '男性',
+                faceShape: '数据解析自 api'
+              };
+
+              ElMessage.success('测算完成！您的专属链接已作废。');
+              // 测算完毕后，前端也把链接状态置为无效，防止他换张图继续点
+              isValidLink.value = false;
+
             } else {
               throw new Error('未检测到人脸');
             }
 
           } catch (error) {
-            console.error(error);
-            ElMessage.error(error.message);
+            // 这里的错误信息可能会显示后端的 "该链接已被使用过"
+            ElMessage.error(error.response?.data?.error || error.message || '请求失败');
           } finally {
             loading.value = false;
           }
         };
-
         return {
-          imageUrl,
-          rawFile,
-          loading,
-          result,
-          customColors,
-          cameraInputRef,
-          handleFileChange,
-          triggerCamera,
-          handleCameraChange,
-          startAnalysis
+          imageUrl, rawFile, loading, result, cameraInputRef,
+          handleFileChange, triggerCamera, handleCameraChange, startAnalysis,
+          isValidLink
         };
       }
     });
@@ -392,4 +393,5 @@
     app.mount('#app');
   </script>
 </body>
+
 </html>
